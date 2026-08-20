@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Вхідна діагностика з математики · GoITeens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=block" rel="stylesheet">
 <style>
 :root{
   --color-yellow:#FEC830;
@@ -1395,7 +1398,18 @@ function blobToBase64(blob){
 
 async function generatePdfBlob(){
   await ensurePdfLibraries();
-  if(document.fonts&&document.fonts.ready) await document.fonts.ready;
+  if(document.fonts){
+    await Promise.all([
+      document.fonts.load('400 16px "IBM Plex Sans"'),
+      document.fonts.load('500 16px "IBM Plex Sans"'),
+      document.fonts.load('600 16px "IBM Plex Sans"'),
+      document.fonts.load('700 26px "IBM Plex Sans"'),
+      document.fonts.load('400 12px "IBM Plex Mono"'),
+      document.fonts.load('600 12px "IBM Plex Mono"'),
+      document.fonts.load('700 12px "IBM Plex Mono"')
+    ]);
+    await document.fonts.ready;
+  }
 
   const source=document.querySelector('.report-shell');
   if(!source) throw new Error('Не знайдено діагностичну картку');
@@ -1417,6 +1431,7 @@ async function generatePdfBlob(){
     for(let index=0;index<pages.length;index+=1){
       const canvas=await window.html2canvas(pages[index],{
         scale:2,
+        foreignObjectRendering:true,
         useCORS:true,
         allowTaint:false,
         backgroundColor:'#ffffff',
