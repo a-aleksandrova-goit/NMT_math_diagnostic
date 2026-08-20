@@ -482,20 +482,15 @@ button{font-family:inherit;cursor:pointer;}
   .report-page::after{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }
 
-/* ---------- PDF export (same two-page layout without opening print dialog) ---------- */
-.pdf-export-root{
-  position:fixed;left:-10000px;top:0;width:960px;background:#fff;z-index:-1;
-  pointer-events:none;overflow:visible;font-kerning:normal;text-rendering:optimizeLegibility;
-  -webkit-font-smoothing:antialiased;
+/* ---------- PDF capture: use the visible report without rebuilding its layout ---------- */
+.pdf-capture-page{
+  height:var(--pdf-capture-height) !important;
+  max-height:var(--pdf-capture-height) !important;
+  margin-bottom:0 !important;
+  overflow:hidden !important;
+  -webkit-print-color-adjust:exact;
+  print-color-adjust:exact;
 }
-.pdf-export-root .report-shell{width:960px;max-width:none;padding:0;margin:0;}
-.pdf-export-root .report-page{
-  box-sizing:border-box;width:960px;height:1358px;max-height:1358px;margin:0;padding:30px;
-  border:0;border-radius:0;box-shadow:none;overflow:hidden;background:#fff;
-}
-.pdf-export-root .report-page + .report-page{margin-top:0;}
-.pdf-export-root .score-card.primary,.pdf-export-root .plan-badge,.pdf-export-root .hist-bar,.pdf-export-root .legend i{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-.pdf-export-root .report-page::after{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 
 @media (max-width:820px){
   .hero{grid-template-columns:1fr;}
@@ -1411,24 +1406,27 @@ async function generatePdfBlob(){
     await document.fonts.ready;
   }
 
-  const source=document.querySelector('.report-shell');
-  if(!source) throw new Error('Не знайдено діагностичну картку');
+  const pages=[...document.querySelectorAll('.report-shell > .report-page')];
+  if(!pages.length) throw new Error('Не знайдено сторінки PDF');
 
-  const exportRoot=document.createElement('div');
-  exportRoot.className='pdf-export-root';
-  exportRoot.setAttribute('aria-hidden','true');
-  exportRoot.appendChild(source.cloneNode(true));
-  document.body.appendChild(exportRoot);
+  const pageStates=pages.map(page=>page.getAttribute('style'));
+  const captureSizes=pages.map(page=>{
+    const width=Math.round(page.getBoundingClientRect().width);
+    return {width,height:Math.round(width*(297/210))};
+  });
+
+  pages.forEach((page,index)=>{
+    page.classList.add('pdf-capture-page');
+    page.style.setProperty('--pdf-capture-height',`${captureSizes[index].height}px`);
+  });
 
   try{
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    const pages=[...exportRoot.querySelectorAll('.report-page')];
-    if(!pages.length) throw new Error('Не знайдено сторінки PDF');
-
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
 
     for(let index=0;index<pages.length;index+=1){
+      const {width,height}=captureSizes[index];
       const canvas=await window.html2canvas(pages[index],{
         scale:2,
         foreignObjectRendering:true,
@@ -1436,10 +1434,12 @@ async function generatePdfBlob(){
         allowTaint:false,
         backgroundColor:'#ffffff',
         logging:false,
-        width:pages[index].scrollWidth,
-        height:pages[index].scrollHeight,
-        windowWidth:pages[index].scrollWidth,
-        windowHeight:pages[index].scrollHeight
+        width,
+        height,
+        windowWidth:document.documentElement.clientWidth,
+        windowHeight:document.documentElement.clientHeight,
+        scrollX:window.scrollX,
+        scrollY:window.scrollY
       });
       if(index>0) pdf.addPage('a4','portrait');
       const imageData=canvas.toDataURL('image/png');
@@ -1447,7 +1447,11 @@ async function generatePdfBlob(){
     }
     return pdf.output('blob');
   }finally{
-    exportRoot.remove();
+    pages.forEach((page,index)=>{
+      page.classList.remove('pdf-capture-page');
+      if(pageStates[index]===null) page.removeAttribute('style');
+      else page.setAttribute('style',pageStates[index]);
+    });
   }
 }
 
