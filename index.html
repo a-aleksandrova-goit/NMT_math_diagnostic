@@ -1391,6 +1391,27 @@ function blobToBase64(blob){
   });
 }
 
+function canvasHasVisibleContent(canvas){
+  const probe=document.createElement('canvas');
+  probe.width=96;
+  probe.height=136;
+  const context=probe.getContext('2d',{willReadFrequently:true});
+  if(!context) return false;
+  context.drawImage(canvas,0,0,probe.width,probe.height);
+  const pixels=context.getImageData(0,0,probe.width,probe.height).data;
+  let visiblePixels=0;
+
+  for(let index=0;index<pixels.length;index+=4){
+    const alpha=pixels[index+3];
+    const red=pixels[index];
+    const green=pixels[index+1];
+    const blue=pixels[index+2];
+    if(alpha>20&&(red<244||green<244||blue<244)) visiblePixels+=1;
+  }
+
+  return visiblePixels>30;
+}
+
 async function generatePdfBlob(){
   await ensurePdfLibraries();
   if(document.fonts){
@@ -1429,23 +1450,26 @@ async function generatePdfBlob(){
       const {width,height}=captureSizes[index];
       const canvas=await window.html2canvas(pages[index],{
         scale:2,
-        foreignObjectRendering:true,
         useCORS:true,
         allowTaint:false,
         backgroundColor:'#ffffff',
         logging:false,
         width,
         height,
-        windowWidth:document.documentElement.clientWidth,
-        windowHeight:document.documentElement.clientHeight,
-        scrollX:window.scrollX,
-        scrollY:window.scrollY
+        windowWidth:Math.max(document.documentElement.clientWidth,width),
+        windowHeight:Math.max(document.documentElement.clientHeight,height),
+        imageTimeout:15000
       });
+      if(!canvasHasVisibleContent(canvas)){
+        throw new Error(`Сторінка ${index+1} PDF не відобразилася`);
+      }
       if(index>0) pdf.addPage('a4','portrait');
       const imageData=canvas.toDataURL('image/png');
       pdf.addImage(imageData,'PNG',0,0,210,297,undefined,'FAST');
     }
-    return pdf.output('blob');
+    const pdfBlob=pdf.output('blob');
+    if(pdfBlob.size<20000) throw new Error('Створений PDF не містить картку');
+    return pdfBlob;
   }finally{
     pages.forEach((page,index)=>{
       page.classList.remove('pdf-capture-page');
