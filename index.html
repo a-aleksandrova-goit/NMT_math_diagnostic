@@ -481,24 +481,16 @@ button{font-family:inherit;cursor:pointer;}
 
 /* ---------- PDF export (same two-page layout without opening print dialog) ---------- */
 .pdf-export-root{
-  position:fixed;left:-10000px;top:0;width:210mm;background:#fff;z-index:-1;
-  pointer-events:none;overflow:visible;
+  position:fixed;left:-10000px;top:0;width:960px;background:#fff;z-index:-1;
+  pointer-events:none;overflow:visible;font-kerning:normal;text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
 }
-.pdf-export-root .report-shell{max-width:none;padding:0;margin:0;}
+.pdf-export-root .report-shell{width:960px;max-width:none;padding:0;margin:0;}
 .pdf-export-root .report-page{
-  box-sizing:border-box;width:210mm;height:297mm;max-height:297mm;margin:0;padding:7mm 8mm;
+  box-sizing:border-box;width:960px;height:1358px;max-height:1358px;margin:0;padding:30px;
   border:0;border-radius:0;box-shadow:none;overflow:hidden;background:#fff;
 }
-.pdf-export-root .report-header{margin-bottom:11px;}.pdf-export-root .report-header h1{font-size:22px;}.pdf-export-root .report-header-main{gap:10px;}
-.pdf-export-root .student-strip{margin-bottom:12px;padding:9px 12px;}.pdf-export-root .score-grid{margin-bottom:12px;gap:9px;}
-.pdf-export-root .score-card{padding:14px;}.pdf-export-root .score-card .big{font-size:32px;}.pdf-export-root .report-section{margin-top:12px;}
-.pdf-export-root .section-head{margin-bottom:8px;}.pdf-export-root .histogram-card{padding:9px 10px 6px;overflow:visible;}
-.pdf-export-root .histogram{min-width:0;height:183px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 32px,#ECEBE8 33px,#ECEBE8 34px);}
-.pdf-export-root .hist-y{height:140px}.pdf-export-root .hist-slot{height:174px}.pdf-export-root .hist-bar-wrap{height:120px}.pdf-export-root .hist-label{font-size:8.8px;}
-.pdf-export-root .insight-grid{margin-top:9px;gap:8px}.pdf-export-root .pill-card{padding:11px}.pdf-export-root .pill-card h3{margin-bottom:5px}.pdf-export-root .pill-card li{padding:5px 7px;font-size:9.5px;}
-.pdf-export-root .plan-grid{gap:10px}.pdf-export-root .plan-card{padding:13px}.pdf-export-root .plan-card h3{font-size:13px}.pdf-export-root .plan-rationale{margin:7px 0 0;padding:6px 8px;font-size:8.8px;line-height:1.25}.pdf-export-root .plan-card li{font-size:9.8px;line-height:1.22}.pdf-export-root .plan-card li span{font-size:9px}.pdf-export-root .plan-card ol{gap:5px}
-.pdf-export-root .qa-review{gap:4px 7px}.pdf-export-root .qa-item{min-height:29px;padding:4px 7px;font-size:9px}.pdf-export-root .qa-topic{font-size:8.5px}.pdf-export-root .qa-category{font-size:7.2px;padding:1px 4px}.pdf-export-root .qa-item .badge{font-size:8px;padding:2px 5px}
-.pdf-export-root .next-step{margin-top:9px;padding:8px 10px;font-size:9.5px}.pdf-export-root .report-footer{margin-top:8px;padding-top:6px;font-size:8px}
+.pdf-export-root .report-page + .report-page{margin-top:0;}
 .pdf-export-root .score-card.primary,.pdf-export-root .plan-badge,.pdf-export-root .hist-bar,.pdf-export-root .legend i{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 .pdf-export-root .report-page::after{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 
@@ -1424,7 +1416,7 @@ async function generatePdfBlob(){
 
     for(let index=0;index<pages.length;index+=1){
       const canvas=await window.html2canvas(pages[index],{
-        scale:1.5,
+        scale:2,
         useCORS:true,
         allowTaint:false,
         backgroundColor:'#ffffff',
@@ -1435,8 +1427,8 @@ async function generatePdfBlob(){
         windowHeight:pages[index].scrollHeight
       });
       if(index>0) pdf.addPage('a4','portrait');
-      const imageData=canvas.toDataURL('image/jpeg',0.94);
-      pdf.addImage(imageData,'JPEG',0,0,210,297,undefined,'FAST');
+      const imageData=canvas.toDataURL('image/png');
+      pdf.addImage(imageData,'PNG',0,0,210,297,undefined,'FAST');
     }
     return pdf.output('blob');
   }finally{
