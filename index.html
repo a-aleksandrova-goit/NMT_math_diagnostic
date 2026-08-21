@@ -459,6 +459,78 @@ button{font-family:inherit;cursor:pointer;}
 .report-footer{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid var(--color-border);font-size:9.5px;color:var(--color-text-soft);}
 .report-footer a{color:inherit;}
 
+/*
+ * html2canvas standard renderer uses slightly different font baselines than
+ * the live browser. These rules are enabled only in its cloned PDF page and
+ * keep text vertically centred without changing the visible report.
+ */
+.report-page.pdf-standard-capture *{animation:none !important;transition:none !important;}
+.report-page.pdf-standard-capture .score-card{
+  display:grid !important;
+  grid-template-rows:14px 38px minmax(16px,auto);
+  align-content:center;
+  row-gap:5px;
+}
+.report-page.pdf-standard-capture .score-card .lbl{
+  margin:0 !important;line-height:14px !important;
+}
+.report-page.pdf-standard-capture .score-card .big{
+  margin:0 !important;line-height:38px !important;
+}
+.report-page.pdf-standard-capture .score-card .sub{
+  margin:0 !important;line-height:16px !important;
+}
+.report-page.pdf-standard-capture .pill-card li{
+  display:flex !important;align-items:center !important;
+  box-sizing:border-box;line-height:15px !important;
+}
+.report-page.pdf-standard-capture .plan-card .plan-badge{
+  display:block !important;text-align:center !important;
+  height:25px !important;min-height:25px !important;
+  line-height:25px !important;padding:0 !important;
+}
+.report-page.pdf-standard-capture .plan-card ol{
+  list-style:none !important;counter-reset:pdf-plan-step;
+  padding-left:0 !important;
+}
+.report-page.pdf-standard-capture .plan-card li{
+  counter-increment:pdf-plan-step;position:relative;padding-left:20px;
+}
+.report-page.pdf-standard-capture .plan-card li::before{
+  content:counter(pdf-plan-step) ".";
+  position:absolute;left:0;top:0;width:16px;
+  font:400 11.5px/15px var(--font-sans);text-align:right;
+}
+.report-page.pdf-standard-capture .plan-card li b{
+  line-height:15px !important;margin-bottom:2px !important;
+}
+.report-page.pdf-standard-capture .plan-card li span{
+  display:block;line-height:14px !important;
+}
+.report-page.pdf-standard-capture .plan-rationale{
+  box-sizing:border-box;line-height:14px !important;
+}
+.report-page.pdf-standard-capture .qa-item{
+  align-items:stretch !important;
+}
+.report-page.pdf-standard-capture .qa-description{
+  display:grid !important;align-content:center;row-gap:3px;
+}
+.report-page.pdf-standard-capture .qa-topic{
+  line-height:13px !important;
+}
+.report-page.pdf-standard-capture .qa-category{
+  display:block !important;width:max-content;height:15px;
+  box-sizing:border-box;margin-top:0 !important;
+  line-height:11px !important;
+}
+.report-page.pdf-standard-capture .qa-item .badge{
+  display:block !important;align-self:center;justify-self:end;
+  width:46px !important;height:25px !important;min-height:25px !important;
+  box-sizing:border-box;padding:3px 5px !important;
+  line-height:19px !important;text-align:center !important;
+}
+
 .result-actions{
   display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
   padding:6px 20px 50px;max-width:1000px;margin:0 auto;
@@ -1450,7 +1522,11 @@ async function renderPdfPage(page,size,pageNumber){
   console.warn(`PDF page ${pageNumber}: retrying with standard renderer`);
   canvas=await window.html2canvas(page,{
     ...baseOptions,
-    foreignObjectRendering:false
+    foreignObjectRendering:false,
+    onclone:clonedDocument=>{
+      const clonedPage=clonedDocument.querySelector(`.report-page--${pageNumber}`);
+      if(clonedPage) clonedPage.classList.add('pdf-standard-capture');
+    }
   });
 
   if(!canvasHasVisibleContent(canvas)){
