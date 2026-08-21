@@ -1414,6 +1414,54 @@ function canvasHasVisibleContent(canvas){
   return visiblePixels>30;
 }
 
+async function renderPdfPage(page,size,pageNumber){
+  const {width,height}=size;
+  const baseOptions={
+    scale:2,
+    useCORS:true,
+    allowTaint:false,
+    backgroundColor:'#ffffff',
+    logging:false,
+    width,
+    height,
+    windowWidth:Math.max(document.documentElement.clientWidth,width),
+    windowHeight:Math.max(document.documentElement.clientHeight,height),
+    imageTimeout:15000
+  };
+
+  let canvas=null;
+
+  try{
+    canvas=await window.html2canvas(page,{
+      ...baseOptions,
+      foreignObjectRendering:true
+    });
+  }catch(error){
+    console.warn(`PDF page ${pageNumber}: foreignObject rendering failed`,error);
+  }
+
+  if(canvas&&canvasHasVisibleContent(canvas)) return canvas;
+
+  if(canvas){
+    canvas.width=1;
+    canvas.height=1;
+  }
+
+  console.warn(`PDF page ${pageNumber}: retrying with standard renderer`);
+  canvas=await window.html2canvas(page,{
+    ...baseOptions,
+    foreignObjectRendering:false
+  });
+
+  if(!canvasHasVisibleContent(canvas)){
+    canvas.width=1;
+    canvas.height=1;
+    throw new Error(`Сторінка ${pageNumber} PDF не відобразилася після повторної спроби`);
+  }
+
+  return canvas;
+}
+
 /*
  * html2canvas recalculates nested flex layouts inside SVG foreignObject.
  * The task label and score badge can therefore wrap differently than they do
@@ -1597,32 +1645,32 @@ async function generatePdfBlob(){
     compress:true
   });
 
-  for(let index=0;index<pages.length;index+=1){
-    const {width,height,pdfWidth,pdfHeight}=captureSizes[index];
-    const canvas=await window.html2canvas(pages[index],{
-      scale:2,
-      useCORS:true,
-      allowTaint:false,
-      backgroundColor:'#ffffff',
-      logging:false,
-      width,
-      height,
-      windowWidth:Math.max(document.documentElement.clientWidth,width),
-      windowHeight:Math.max(document.documentElement.clientHeight,height),
-      imageTimeout:15000,
-      foreignObjectRendering:true
-    });
-    if(!canvasHasVisibleContent(canvas)){
-      throw new Error(`Сторінка ${index+1} PDF не відобразилася`);
+  const previousScrollX=window.scrollX;
+  const previousScrollY=window.scrollY;
+
+  try{
+    for(let index=0;index<pages.length;index+=1){
+      const {pdfWidth,pdfHeight}=captureSizes[index];
+      pages[index].scrollIntoView({block:'start',inline:'nearest',behavior:'auto'});
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+
+      const canvas=await renderPdfPage(pages[index],captureSizes[index],index+1);
+      if(index>0){
+        pdf.addPage(
+          [pdfWidth,pdfHeight],
+          pdfHeight>=pdfWidth?'portrait':'landscape'
+        );
+      }
+      const imageData=canvas.toDataURL('image/png');
+      pdf.addImage(imageData,'PNG',0,0,pdfWidth,pdfHeight,undefined,'FAST');
+
+      // Explicitly release the large bitmap before rendering the next page.
+      canvas.width=1;
+      canvas.height=1;
+      await new Promise(resolve=>requestAnimationFrame(resolve));
     }
-    if(index>0){
-      pdf.addPage(
-        [pdfWidth,pdfHeight],
-        pdfHeight>=pdfWidth?'portrait':'landscape'
-      );
-    }
-    const imageData=canvas.toDataURL('image/png');
-    pdf.addImage(imageData,'PNG',0,0,pdfWidth,pdfHeight,undefined,'FAST');
+  }finally{
+    window.scrollTo({left:previousScrollX,top:previousScrollY,behavior:'auto'});
   }
   const pdfBlob=pdf.output('blob');
   if(pdfBlob.size<20000) throw new Error('Створений PDF не містить картку');
