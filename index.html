@@ -489,18 +489,6 @@ button{font-family:inherit;cursor:pointer;}
   height:25px !important;min-height:25px !important;
   line-height:25px !important;padding:0 !important;
 }
-.report-page.pdf-standard-capture .plan-card ol{
-  list-style:none !important;counter-reset:pdf-plan-step;
-  padding-left:0 !important;
-}
-.report-page.pdf-standard-capture .plan-card li{
-  counter-increment:pdf-plan-step;position:relative;padding-left:20px;
-}
-.report-page.pdf-standard-capture .plan-card li::before{
-  content:counter(pdf-plan-step) ".";
-  position:absolute;left:0;top:0;width:16px;
-  font:400 11.5px/15px var(--font-sans);text-align:right;
-}
 .report-page.pdf-standard-capture .plan-card li b{
   line-height:15px !important;margin-bottom:2px !important;
 }
@@ -1437,9 +1425,16 @@ function loadScriptOnce(src,readyCheck){
 }
 
 async function ensurePdfLibraries(){
+  const htmlToImageReady=loadScriptOnce(
+    'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js',
+    ()=>Boolean(window.htmlToImage&&window.htmlToImage.toCanvas)
+  ).catch(error=>{
+    console.warn('html-to-image library is unavailable; PDF will use a fallback renderer',error);
+  });
   await Promise.all([
     loadScriptOnce('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',()=>typeof window.html2canvas==='function'),
-    loadScriptOnce('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',()=>Boolean(window.jspdf&&window.jspdf.jsPDF))
+    loadScriptOnce('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',()=>Boolean(window.jspdf&&window.jspdf.jsPDF)),
+    htmlToImageReady
   ]);
 }
 
@@ -1504,6 +1499,30 @@ async function renderPdfPage(page,size,pageNumber){
   let canvas=null;
 
   try{
+    if(!window.htmlToImage||!window.htmlToImage.toCanvas) throw new Error('html-to-image недоступний');
+    canvas=await window.htmlToImage.toCanvas(page,{
+      backgroundColor:'#ffffff',
+      width,
+      height,
+      pixelRatio:2,
+      cacheBust:true,
+      skipAutoScale:true
+    });
+  }catch(error){
+    console.warn(`PDF page ${pageNumber}: html-to-image rendering failed`,error);
+  }
+
+  if(canvas&&canvasHasVisibleContent(canvas)){
+    canvas.setAttribute('data-pdf-renderer','html-to-image');
+    return canvas;
+  }
+
+  if(canvas){
+    canvas.width=1;
+    canvas.height=1;
+  }
+
+  try{
     canvas=await window.html2canvas(page,{
       ...baseOptions,
       foreignObjectRendering:true
@@ -1512,7 +1531,10 @@ async function renderPdfPage(page,size,pageNumber){
     console.warn(`PDF page ${pageNumber}: foreignObject rendering failed`,error);
   }
 
-  if(canvas&&canvasHasVisibleContent(canvas)) return canvas;
+  if(canvas&&canvasHasVisibleContent(canvas)){
+    canvas.setAttribute('data-pdf-renderer','html2canvas-foreign-object');
+    return canvas;
+  }
 
   if(canvas){
     canvas.width=1;
@@ -1535,6 +1557,7 @@ async function renderPdfPage(page,size,pageNumber){
     throw new Error(`Сторінка ${pageNumber} PDF не відобразилася після повторної спроби`);
   }
 
+  canvas.setAttribute('data-pdf-renderer','html2canvas-standard');
   return canvas;
 }
 
