@@ -1411,6 +1411,152 @@ function canvasHasVisibleContent(canvas){
   return visiblePixels>30;
 }
 
+/*
+ * html2canvas recalculates nested flex layouts inside SVG foreignObject.
+ * The task label and score badge can therefore wrap differently than they do
+ * in the live browser. Before the clone is painted, copy the browser-resolved
+ * pixel geometry into the cloned report so the PDF uses the exact same layout.
+ */
+function freezeQaLayoutForPdf(sourcePage,clonedPage){
+  if(!sourcePage||!clonedPage) return;
+
+  const sourceItems=[...sourcePage.querySelectorAll('.qa-item')];
+  const clonedItems=[...clonedPage.querySelectorAll('.qa-item')];
+
+  const pin=(source,clone,origin,display)=>{
+    if(!source||!clone) return;
+    const rect=source.getBoundingClientRect();
+    clone.style.setProperty('position','absolute','important');
+    clone.style.setProperty('left',`${rect.left-origin.left}px`,'important');
+    clone.style.setProperty('top',`${rect.top-origin.top}px`,'important');
+    clone.style.setProperty('width',`${rect.width}px`,'important');
+    clone.style.setProperty('height',`${rect.height}px`,'important');
+    clone.style.setProperty('min-width','0','important');
+    clone.style.setProperty('max-width','none','important');
+    clone.style.setProperty('margin','0','important');
+    clone.style.setProperty('box-sizing','border-box','important');
+    clone.style.setProperty('transform','none','important');
+    if(display) clone.style.setProperty('display',display,'important');
+  };
+
+  sourceItems.forEach((sourceItem,index)=>{
+    const clonedItem=clonedItems[index];
+    if(!clonedItem) return;
+
+    const itemRect=sourceItem.getBoundingClientRect();
+    const itemOrigin={
+      left:itemRect.left+sourceItem.clientLeft,
+      top:itemRect.top+sourceItem.clientTop
+    };
+    clonedItem.style.setProperty('position','relative','important');
+    clonedItem.style.setProperty('display','block','important');
+    clonedItem.style.setProperty('width',`${itemRect.width}px`,'important');
+    clonedItem.style.setProperty('height',`${itemRect.height}px`,'important');
+    clonedItem.style.setProperty('min-height',`${itemRect.height}px`,'important');
+    clonedItem.style.setProperty('padding','0','important');
+    clonedItem.style.setProperty('box-sizing','border-box','important');
+
+    const sourceDescription=sourceItem.querySelector('.qa-description');
+    const clonedDescription=clonedItem.querySelector('.qa-description');
+
+    if(sourceDescription&&clonedDescription){
+      const descriptionRect=sourceDescription.getBoundingClientRect();
+      pin(sourceDescription,clonedDescription,itemOrigin,'block');
+
+      pin(
+        sourceDescription.querySelector('.qa-topic'),
+        clonedDescription.querySelector('.qa-topic'),
+        descriptionRect,
+        'block'
+      );
+      pin(
+        sourceDescription.querySelector('.qa-category'),
+        clonedDescription.querySelector('.qa-category'),
+        descriptionRect,
+        'block'
+      );
+    }
+
+    pin(
+      sourceItem.querySelector('.badge'),
+      clonedItem.querySelector('.badge'),
+      itemOrigin,
+      'flex'
+    );
+    const clonedBadge=clonedItem.querySelector('.badge');
+    if(clonedBadge){
+      clonedBadge.style.setProperty('align-items','center','important');
+      clonedBadge.style.setProperty('justify-content','center','important');
+    }
+  });
+}
+
+function freezeHighlightedCardsForPdf(sourcePage,clonedPage){
+  if(!sourcePage||!clonedPage) return;
+
+  const pin=(source,clone,origin,display)=>{
+    if(!source||!clone) return;
+    const rect=source.getBoundingClientRect();
+    clone.style.setProperty('position','absolute','important');
+    clone.style.setProperty('left',`${rect.left-origin.left}px`,'important');
+    clone.style.setProperty('top',`${rect.top-origin.top}px`,'important');
+    clone.style.setProperty('width',`${rect.width}px`,'important');
+    clone.style.setProperty('height',`${rect.height}px`,'important');
+    clone.style.setProperty('min-width','0','important');
+    clone.style.setProperty('max-width','none','important');
+    clone.style.setProperty('margin','0','important');
+    clone.style.setProperty('box-sizing','border-box','important');
+    clone.style.setProperty('transform','none','important');
+    if(display) clone.style.setProperty('display',display,'important');
+  };
+
+  const freezeCards=(cardSelector,children)=>{
+    const sourceCards=[...sourcePage.querySelectorAll(cardSelector)];
+    const clonedCards=[...clonedPage.querySelectorAll(cardSelector)];
+
+    sourceCards.forEach((sourceCard,index)=>{
+      const clonedCard=clonedCards[index];
+      if(!clonedCard) return;
+
+      const cardRect=sourceCard.getBoundingClientRect();
+      const cardOrigin={
+        left:cardRect.left+sourceCard.clientLeft,
+        top:cardRect.top+sourceCard.clientTop
+      };
+      clonedCard.style.setProperty('position','relative','important');
+      clonedCard.style.setProperty('display','block','important');
+      clonedCard.style.setProperty('width',`${cardRect.width}px`,'important');
+      clonedCard.style.setProperty('height',`${cardRect.height}px`,'important');
+      clonedCard.style.setProperty('min-height',`${cardRect.height}px`,'important');
+      clonedCard.style.setProperty('padding','0','important');
+      clonedCard.style.setProperty('box-sizing','border-box','important');
+
+      children.forEach(({selector,display})=>{
+        const sourceChild=sourceCard.querySelector(`:scope > ${selector}`);
+        const clonedChild=clonedCard.querySelector(`:scope > ${selector}`);
+        pin(sourceChild,clonedChild,cardOrigin,display);
+        if(display==='flex'&&clonedChild){
+          clonedChild.style.setProperty('align-items','center','important');
+          clonedChild.style.setProperty('justify-content','center','important');
+        }
+      });
+    });
+  };
+
+  freezeCards('.plan-card',[
+    {selector:'.plan-badge',display:'flex'},
+    {selector:'h3',display:'block'},
+    {selector:'ol',display:'flex'},
+    {selector:'.plan-rationale',display:'block'}
+  ]);
+
+  freezeCards('.score-card',[
+    {selector:'.lbl',display:'block'},
+    {selector:'.big',display:'block'},
+    {selector:'.sub',display:'block'}
+  ]);
+}
+
 async function generatePdfBlob(){
   await ensurePdfLibraries();
   if(document.fonts){
@@ -1461,7 +1607,12 @@ async function generatePdfBlob(){
       windowWidth:Math.max(document.documentElement.clientWidth,width),
       windowHeight:Math.max(document.documentElement.clientHeight,height),
       imageTimeout:15000,
-      foreignObjectRendering:true
+      foreignObjectRendering:true,
+      onclone:clonedDocument=>{
+        const clonedPages=[...clonedDocument.querySelectorAll('.report-shell > .report-page')];
+        freezeQaLayoutForPdf(pages[index],clonedPages[index]);
+        freezeHighlightedCardsForPdf(pages[index],clonedPages[index]);
+      }
     });
     if(!canvasHasVisibleContent(canvas)){
       throw new Error(`Сторінка ${index+1} PDF не відобразилася`);
